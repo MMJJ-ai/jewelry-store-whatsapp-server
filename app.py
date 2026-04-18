@@ -12,42 +12,42 @@ OWNER_PHONE = "00218914587353"
 # رابط API لإرسال الرسائل عبر WhatsApp (سنستخدم خدمة مجانية)
 WHATSAPP_API_URL = "https://api.callmebot.com/whatsapp.php"
 
-@app.route('/api/submit-order', methods=['POST'])
-def submit_order():
+@app.route('/send-order', methods=['POST'])
+def send_order():
     try:
         data = request.json
         phone = data.get('phone', '')
         address = data.get('address', '')
+        product = data.get('product', 'طاقم فاخر بطلاء الذهب')
+        price = data.get('price', '260 دينار')
+        delivery = data.get('delivery', 'مجاني إلى جميع مدن ليبيا')
         
         if not phone or not address:
             return jsonify({'success': False, 'message': 'بيانات غير كاملة'}), 400
         
         # إنشاء رسالة الطلب
-        order_message = f"""
-🎉 طلب جديد من متجر المجوهرات
+        order_message = f"""🎉 طلب جديد من متجر المجوهرات
 
 📱 رقم الهاتف: {phone}
 📍 العنوان/المدينة: {address}
 ⏰ الوقت: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')}
 
-المنتج: طاقم فاخر بطلاء الذهب
-💰 السعر: 260 دينار (شامل التوصيل)
-🚚 التوصيل: مجاني إلى جميع مدن ليبيا
-        """
+المنتج: {product}
+💰 السعر: {price}
+🚚 التوصيل: {delivery}"""
+        
+        # حفظ الطلب في ملف أولاً
+        save_order_to_file(phone, address, product, price)
         
         # إرسال الرسالة عبر CallMeBot (مجاني)
         try:
             params = {
-                'phone': OWNER_PHONE.replace('+', ''),
-                'text': order_message,
-                'apikey': 'YOUR_API_KEY'  # يمكن تركه فارغاً للخدمة المجانية
+                'phone': OWNER_PHONE.replace('+', '').replace('00', ''),
+                'text': order_message
             }
             
             # محاولة إرسال عبر CallMeBot
             response = requests.get(WHATSAPP_API_URL, params=params, timeout=10)
-            
-            # حفظ الطلب في ملف (للنسخ الاحتياطي)
-            save_order_to_file(phone, address)
             
             return jsonify({
                 'success': True,
@@ -55,25 +55,26 @@ def submit_order():
             }), 200
             
         except Exception as e:
-            # حتى لو فشل الإرسال، نحفظ الطلب
-            save_order_to_file(phone, address)
+            print(f"خطأ في إرسال WhatsApp: {str(e)}")
+            # حتى لو فشل الإرسال، الطلب محفوظ
             return jsonify({
                 'success': True,
                 'message': 'تم تأكيد الطلب! سيتصل بك المندوب قريباً'
             }), 200
     
     except Exception as e:
+        print(f"خطأ عام: {str(e)}")
         return jsonify({'success': False, 'message': f'خطأ: {str(e)}'}), 500
 
-def save_order_to_file(phone, address):
+def save_order_to_file(phone, address, product, price):
     """حفظ الطلب في ملف للنسخ الاحتياطي"""
     try:
         order_data = {
             'phone': phone,
             'address': address,
             'timestamp': datetime.now().isoformat(),
-            'product': 'طاقم فاخر بطلاء الذهب',
-            'price': '260 دينار'
+            'product': product,
+            'price': price
         }
         
         # إضافة الطلب إلى ملف JSON
@@ -87,8 +88,8 @@ def save_order_to_file(phone, address):
         
         with open('orders.json', 'w', encoding='utf-8') as f:
             json.dump(orders, f, ensure_ascii=False, indent=2)
-    except:
-        pass
+    except Exception as e:
+        print(f"خطأ في حفظ الطلب: {str(e)}")
 
 @app.route('/api/orders', methods=['GET'])
 def get_orders():
